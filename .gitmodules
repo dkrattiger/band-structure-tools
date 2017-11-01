@@ -1,0 +1,3 @@
+[submodule "libraries/general-tools"]
+	path = libraries/general-tools
+	url = https://github.com/dkrattiger/general-tools.git
