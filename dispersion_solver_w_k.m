@@ -33,10 +33,6 @@ function [omega,PHI,t_kloop,varargout] = dispersion_solver_w_k(kappa,K,M,dof_set
 % t_kloop       = computation time for each k point
 
 
-%% Add subfolders with dependent libraries to Matlab path
-% ======================================================================= %
-addpath(genpath('libraries'))
-
 %% Default options
 % ======================================================================= %
 
@@ -278,7 +274,3 @@ end
 if nargout>=4
     varargout{1} = iWindow;
 end
-
-%% Remove subfolders from Matlab path
-% ======================================================================= %
-rmpath(genpath('libraries'))
