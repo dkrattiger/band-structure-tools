@@ -1,4 +1,4 @@
-function [h] = dispersion_plot_k_w(omega,kappas,options)
+function [h] = dispersion_plot_k_w(omegas,kappas,options)
 
 % set line width parameter
 linewidths = 1;
@@ -10,12 +10,12 @@ tol = 1e-2;
 % ======================================================================= %
 dfcolor = get(groot,'factoryAxesColorOrder');% matlab's builtin color order
 
-defaults.ColorOrder         = mat2cell(dfcolor,ones(1,size(dfcolor,1)),[3]); 
-defaults.LineStyleOrder     = {'-','--',':','-.'};
-defaults.LineWidthOrder     = {1};
-defaults.MarkerEdgeColor    = {'auto'};  
-defaults.MarkerFaceColor    = {'none'};   
-defaults.MarkerOrder        = {'none'};
+defaults.Colors             = mat2cell(dfcolor,ones(1,size(dfcolor,1)),[3]); 
+defaults.LineStyles         = {'-','--',':','-.'};
+defaults.LineWidths         = {1};
+defaults.MarkerEdgeColors   = {'auto'};  
+defaults.MarkerFaceColors   = {'none'};   
+defaults.Markers            = {'none'};
 defaults.SeparateSubplots   = true;
 defaults.splitImag          = false;
 defaults.ThreeD             = false;
@@ -31,12 +31,37 @@ else
     options = defaults;
 end
 
+%% Check the arguments "kappas" and "omega"
+% ======================================================================= %
+
+% if kappas is not a cell array, make it one
+if ~iscell(kappas)
+    kappas = {kappas};
+end
+
+
+% if omega is not a cell array, make it one
+if ~iscell(omegas)
+    omegas = {omegas};
+end
+
+% if just a single vector is provided for omega, copy it for each instance
+% in kappas
+if length(omegas) == 1
+    for i = 2:length(kappas)
+        omegas{i} = omegas{1};
+    end
+end
+
+
+
 %% loop through each set of results being plotted
 % ======================================================================= %
 for i = 1:length(kappas)
     
-    % extract current set of kappa solutions from cell array
+    % extract current set of kappa and omega solutions from cell array
     kappa = kappas{i};
+    omega = omegas{i};
     
     % find maximum kappa solution
     max_kap = max(max(abs(real(kappa))));
@@ -114,28 +139,28 @@ for i = 1:length(kappas)
     for j = 1:3
                     
         % set line color
-        i_color = rem(i-1,size(options.ColorOrder,1))+1;
-        set(h{i,j},'color', options.ColorOrder{i_color});
+        i_color = rem(i-1,size(options.Colors,1))+1;
+        set(h{i,j},'color', options.Colors{i_color});
         
         % set line style
-        i_linestyle = rem(i-1,length(options.LineStyleOrder))+1;
-        set(h{i,j},'linestyle', options.LineStyleOrder{i_linestyle});
+        i_linestyle = rem(i-1,length(options.LineStyles))+1;
+        set(h{i,j},'linestyle', options.LineStyles{i_linestyle});
         
         % set linewidths
-        i_linewidth = rem(i-1,length(options.LineWidthOrder))+1;
-        set(h{i,j},'linewidth', options.LineWidthOrder{i_linewidth});
+        i_linewidth = rem(i-1,length(options.LineWidths))+1;
+        set(h{i,j},'linewidth', options.LineWidths{i_linewidth});
         
         % set marker type
-        i_marker = rem(i-1,length(options.MarkerOrder))+1;
-        set(h{i,j},'marker', options.MarkerOrder{i_marker});
+        i_marker = rem(i-1,length(options.Markers))+1;
+        set(h{i,j},'marker', options.Markers{i_marker});
         
         % set marker edge color
-        i_markerEdge = rem(i-1,length(options.MarkerEdgeColor))+1;
-        set(h{i,j},'markeredgecolor', options.MarkerEdgeColor{i_markerEdge});
+        i_markerEdge = rem(i-1,length(options.MarkerEdgeColors))+1;
+        set(h{i,j},'markeredgecolor', options.MarkerEdgeColors{i_markerEdge});
         
         % set marker edge color
-        i_markerFace = rem(i-1,length(options.MarkerFaceColor))+1;
-        set(h{i,j},'markerfacecolor', options.MarkerFaceColor{i_markerFace});
+        i_markerFace = rem(i-1,length(options.MarkerFaceColors))+1;
+        set(h{i,j},'markerfacecolor', options.MarkerFaceColors{i_markerFace});
     end
     
     % define legend handle vector
