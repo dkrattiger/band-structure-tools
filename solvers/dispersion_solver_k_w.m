@@ -36,10 +36,6 @@ function [kappa,PHI,varargout] = dispersion_solver_k_w(omegas,Kf,Cf,Mf,dof_sets,
 %
 % t_wloop       = timing results for each frequency point (n_freq x 1)
 
-%% Add subfolders with dependent libraries to Matlab path
-% ======================================================================= %
-addpath(genpath('libraries'))
-
 %% Default options
 % ======================================================================= %
 
@@ -275,7 +271,3 @@ end
 if nargout>=3
     varargout{1} = t_wloop;
 end
-
-%% Remove subfolders from Matlab path
-% ======================================================================= %
-rmpath(genpath('libraries'))
