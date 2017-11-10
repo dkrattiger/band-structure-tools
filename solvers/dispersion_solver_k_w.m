@@ -39,8 +39,9 @@ function [kappa,PHI,varargout] = dispersion_solver_k_w(omegas,Kf,Cf,Mf,dof_sets,
 %% Default options
 % ======================================================================= %
 
-% if options does not exist, assume that single parameter n_curves has been
-% given
+% if the last argument given is not an options structure, assume that it 
+% is a single parameter specifying the number of desired curves. (This is
+% how older versions of the code were called.)
 if nargin<6
     options.dummy = 0;
 else
@@ -54,14 +55,21 @@ end
 % does the model have residual enhancement?
 resPlus = isstruct(Kf);
 
-% use dynamic reduction?
+% Default behavior for dynamic reduction: 
+% If eigenvalue solution method is direct, we really need dynamic
+% reduction unless the model is very small. For iterative solution, we are
+% taking advantage of sparsity so dynamic reduction is not necessarily
+% beneficial.
 dynRed = true;
 if isfield(options,'full_eig')
     if ~options.full_eig    
         dynRed = false;
     end   
 end
-% don't use dynamic reduction if residual-enhanced model is detected
+
+% Don't use dynamic reduction if residual-enhanced model is detected. It
+% doesn't seem to work. Hopefully model reduction is sufficient so this 
+% won't play a large role anyway.
 if resPlus    
     dynRed = false;
 end
@@ -69,32 +77,41 @@ end
 % default option values
 defaults.n_curves           = 10;
 defaults.verbose            = true;
-defaults.k                  = 30;   % number of Arnoldi vectors (increased values sometimes help with eigvalue conditioning)
 defaults.full_eig           = true;
 defaults.dynamicReduction   = dynRed;
 defaults.useConditionValue  = true;
-defaults.sparse             = true;
 
-% defaults.storephi = n_dof_per<10000 ;
-%defaults.fullEig = gets determined by model size and # curves;
-%defaults.fullIterativeEig = gets determined by model size and # curves;
-
-
+% copy default values into blank fields of options structure
 options = setstructfields(defaults,options);
 
-% guess1 = 'sm';
-guess1 = 1.1;
-guess2 = 0.;
+% guess values to be used as centering frequencies by iterative solver
+guess1 = 1;
+guess2 = 0.0;
 guess = guess1;
 
-
+% Notes about options parameters:
+% ===============================
+% (1)   Dynamic reduction makes use of a system solution where the matrices
+%       are sparse. MATLAB automatically chooses the cholmod when the system
+%       to be solved is symmetric positive definite (SPD). When the
+%       frequency is zero, the dynamic matrix is SPD, but as the frequency
+%       is increased, eventually it becomes indefinite. When this happens
+%       a slower solver must be used. Run "spparms('spumoni',1)" before
+%       script to output detailed info about the sparse routines being
+%       called by MATLAB.
+% (2)   The default behavior is to perform full (direct) eigenvalue
+%       solutions rather than utilizing an iterative solver. The reason for
+%       this is that the eigenvalues are of the form:
+%       lambda=exp(i*kappa*Lx). If we find the k smallest lambdas, it does
+%       not mean that we have found the k smallest kappas. To guarantee
+%       that we have found the desired solutions we need to compute all of
+%       the eigenvalues. There may be a way to transform the problem to
+%       guarantee this but this is the subject of further research. Note,
+%       this would not be a problem if we used the Bloch-operator approach
+%       rather than the Bloch boundary condition approach.
 
 %% Prepare for dynamic reduction
 % ======================================================================= %
-% form Bloch-periodicity matrices using boundary DOF sets
-% Output T_per is a structure with fields s0, s1, s2, s3, s12, s13, s23,
-% s123. These can be combined to form the Bloch-periodicity transformation
-% matrix for any wavevector.
 i_i = dof_sets.i;
 
 % create a list of all boundary DOFs
@@ -108,15 +125,16 @@ n_b = length(i_b);
 
 %% Check whether damping matrix is included
 % ======================================================================= %
-% use_C = true;
+
+n_dof = size(Kf,1);
 if isempty(Cf)
     clear Cf;
     if resPlus
-        Cf.w0=0;
-        Cf.w2=0;
-        Cf.w4=0;
+        Cf.w0=spalloc(n_dof,n_dof,0);
+        Cf.w2=spalloc(n_dof,n_dof,0);
+        Cf.w4=spalloc(n_dof,n_dof,0);
     else
-        Cf = 0;
+        Cf = spalloc(n_dof,n_dof,0);
     end
 end
 
@@ -125,7 +143,8 @@ end
 % form Bloch-periodicity matrices using boundary DOF sets
 % Output T_per is a structure with fields s0, s1, s2, s3, s12, s13, s23,
 % s123. These can be combined to form the Bloch-periodicity transformation
-% matrix for any wavevector.
+% matrix for any wavevector. At this point, the solver only uses s0 and s1
+% because we only solve in the Gamma-X direction.
 if options.dynamicReduction
     dof_sets.i = [];
 end
@@ -140,13 +159,10 @@ n_p = size(R,2);
 n_om = length(omegas);
         
 % preallocate arrays
-if options.full_eig
-    n_curves = 2*n_dof_per;
-end
-PHI = zeros(n_dof_per,n_curves,n_om);
-kappa = nan(n_curves,n_om);
+PHI = zeros(n_dof_per,options.n_curves,n_om);
+kappa = nan(options.n_curves,n_om);
 t_wloop = zeros(1,n_w);
-Lsave = nan(n_curves,n_om);
+Lsave = nan(options.n_curves,n_om);
 
 % GAMMA-X Direction
 Tx = T_per.s1 + T_per.s12 + T_per.s13 + T_per.s123;
@@ -179,10 +195,12 @@ for j1 = 1:n_w
     D = (1/2)*(D+D');
     
     % dynamic reduction
-    if dynRed
+    if options.dynamicReduction
         Dhat = D(i_b,i_b)-D(i_b,i_i)*(D(i_i,i_i)\D(i_i,i_b));
+        dynRedString = 'dynamically reduced, ';
     else
         Dhat = D;
+        dynRedString = [];
     end
         
     % Apply periodicity transformation and decompose D by powers of 
@@ -191,8 +209,8 @@ for j1 = 1:n_w
     D1 = T0'*Dhat*T0 + Tx'*Dhat*Tx; % linear in exp(i kx lx)
     D2 = T0'*Dhat*Tx;               % quadratic in exp(i kx lx)
     
-    
-    % scaling value to improve conditioning of state space problem
+    % scaling value to improve conditioning of state space problem. I
+    % haven't observe this to make a noticeable difference.
     if options.useConditionValue
         condVal = (sum(diag(D0))+sum(diag(D1))+sum(diag(D2)))/(3*n_dof_per);
     else
@@ -218,56 +236,76 @@ for j1 = 1:n_w
     A = sparse(Arow,Acol,Aval,(2*n_dof_per),(2*n_dof_per));
     B = sparse(Brow,Bcol,Bval,(2*n_dof_per),(2*n_dof_per));
 
-%         % form state space matrices
-%         A = [D0,zeros(n_dof_per);zeros(n_dof_per),eye(n_dof_per)*condVal];
-%         B = [-D1,-D2;eye(n_dof_per)*condVal,zeros(n_dof_per)];
+    % % form state space matrices
+    % A = [D0,zeros(n_dof_per);zeros(n_dof_per),eye(n_dof_per)*condVal];
+    % B = [-D1,-D2;eye(n_dof_per)*condVal,zeros(n_dof_per)];
     
     % eigenvalue solution
     if options.full_eig
         [PHIs,L] = eig(full(A),full(B),'vector');
+        
+        % solution string
+        soln_type = 'direct';
     else
         
         % The matrices A and B should be sparse
-        try
-            [PHIs,L] = eigs((A),(B),n_curves,guess);
+%         try
+            [PHIs,L] = eigs((A),(B),options.n_curves,guess);
             L = diag(L);
-        catch
-            if guess == guess1
-                guess = guess2;
-            else
-                guess = guess1;
-            end
-            [PHIs,L] = eigs((A),(B),n_curves,guess);
-            L = diag(L);
-            disp('iterative, guess = ');disp(guess)
-        end
+            
+%         catch
+%             
+%             % note that inverse arnoldi can fail if we are looking for
+%             % solutions near a pt that happens to exactly contain a
+%             % solution. Thus, if the iterative solver fails, we try
+%             % perturbing the centering point.
+%             if guess == guess1
+%                 guess = guess2;
+%                 oldguess = guess1;
+%             else
+%                 guess = guess1;
+%                 oldguess = guess2;
+%             end
+%             
+%             fprintf(['"eigs" solver failed looking for solutions near ',...
+%                     num2str(oldguess),'. Trying to find solutions near ',...
+%                     num2str(guess),'.\n'])
+%                 
+%             [PHIs,L] = eigs(A,B,options.n_curves,guess);
+%             L = diag(L);
+%         end
+        
+        % solution string (used for outputing info to command window)
+        soln_type = 'iterative';
     end
     
     % post process solutions     
     % gamma-X direction
-    L_tol = 1e-9;
-    L_tol = 1e-99;
     logL = log(L');
-    Lsave(:,j1) = L;
     kappas = logL/(-1i*R(1));
     
     % sort solutions by complex magnitude
     [~,i_sort] = sort(abs(kappas));
     kappas = kappas(i_sort);
     PHIs = PHIs(1:n_dof_per,i_sort);
+    L = L(i_sort);
     
     % Save solutions
-    PHI(:,:,j1) = PHIs;
-    kappa(:,j1) = kappas';
-    lam(:,j1) = (L);
+    PHI(:,:,j1) = PHIs(:,1:options.n_curves);
+    kappa(:,j1) = kappas(1:options.n_curves)';
+    Lsave(:,j1) = L(1:options.n_curves);
     
     % loop timing
-    t_wloop(j1) = toc(tstart);    
+    t_wloop(j1) = toc(tstart);
     
     % display loop timing info
-    fprintf('freq. point %i of %i, solution time: %4.2f\n',j1,n_w,t_wloop(j1))
+    fprintf(['freq. point %i of %i, ',...
+             soln_type,' solution, ',...
+             dynRedString,...
+             'calc. time: %4.2f\n'],j1,n_w,t_wloop(j1))
 end
 
+% if enough arguments are requested, output the w-loop timing vector
 if nargout>=3
     varargout{1} = t_wloop;
 end
