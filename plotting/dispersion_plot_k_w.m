@@ -1,4 +1,4 @@
-function [h] = dispersion_plot_k_w(omegas,kappas,options)
+function [varargout] = dispersion_plot_k_w(omegas,kappas,options)
 
 % set line width parameter
 linewidths = 1;
@@ -139,7 +139,7 @@ for i = 1:length(kappas)
     for j = 1:3
                     
         % set line color
-        i_color = rem(i-1,size(options.Colors,1))+1;
+        i_color = rem(i-1,length(options.Colors))+1;
         set(h{i,j},'color', options.Colors{i_color});
         
         % set line style
@@ -172,3 +172,8 @@ if ~isempty(options.legendstrings)
     legend(legendvec,options.legendstrings,'location','northeast');
 end
 hold off
+
+varargout{1} = h;
+if nargout>=2
+    varargout{2} = legendvec;
+end
