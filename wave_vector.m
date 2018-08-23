@@ -66,7 +66,6 @@ for i = 1:n_sym_pts
     end
 end
 
-
 for i = 1:n_sym_pts
     sym_pt_array(:,i) = sym_pt_struct.(symPts{i});
 end

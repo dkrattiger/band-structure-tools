@@ -40,6 +40,7 @@ defaults.n_curves = 10;
 defaults.wCenter  = 0;
 defaults.verbose  = true;
 defaults.k        = 30;
+defaults.RBME_Transformation = [];
 % defaults.storephi = n_dof_per<10000 ;
 
 %defaults.fullEig = gets determined by model size and # curves;
@@ -57,7 +58,13 @@ end
 options = setstructfields(defaults,options);
 
 % verbose = true;
-resPlus = isstruct(K);
+resPlusBMS = isstruct(K);
+
+% RBME options
+if ~isempty(options.RBME_Transformation)
+    do_RBME = true;
+    T_RBME = options.RBME_Transformation;
+end
 
 
 %% Sparsify matrices if density is less than 0.2
@@ -65,7 +72,7 @@ resPlus = isstruct(K);
 
 % value of matrix density below which to use sparse algorithms
 density_tol = 0.1; % 0.1 is quite high, not sure what the exact cutoff should be though 
-if resPlus
+if resPlusBMS
     density = nnz(M.w0)/numel(M.w0);
     if density < density_tol
         K.w0 = sparse(K.w0);        M.w0 = sparse(M.w0);
@@ -97,7 +104,6 @@ T_per = Periodic_Boundary_Conditions(dof_sets);
 % number of DOFs
 n_dof = size(T_per.s0,1);
 n_dof_per = size(T_per.s0,2);
-
 
 %% Update computed default options if not given
 % ======================================================================= %
@@ -155,7 +161,7 @@ for j1 = 1:n_kap
             + T_per.s123*lam(1)*lam(2)*lam(3);
                 
     % different approach if residual enhancement
-    if resPlus
+    if resPlusBMS
         
         % Apply Periodicity Transformation to all matrices
         Kp.w0 = (T_per_k'*K.w0*T_per_k);
@@ -208,6 +214,11 @@ for j1 = 1:n_kap
         K_hat = (T_per_k'*K*T_per_k);
         M_hat = (T_per_k'*M*T_per_k);
         
+        % apply RBME reduction transformation
+        if do_RBME
+            K_hat = T_RBME'*K_hat*T_RBME;
+            M_hat = T_RBME'*M_hat*T_RBME;
+        end
     end
     
     %symmetrize matrices
