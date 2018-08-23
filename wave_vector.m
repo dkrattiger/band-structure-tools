@@ -94,4 +94,4 @@ kappa_plot = zeros(1,n_kap);
 for i = 2:n_kap
     kappa_plot(i) = kappa_plot(i-1)+norm(kappa(:,i)-kappa(:,i-1));
 end
-kappa_plot = kappa_plot/kappa_plot(end);
+kappa_plot = kappa_plot;
